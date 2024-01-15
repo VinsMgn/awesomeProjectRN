@@ -1,118 +1,103 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
-
-import React from 'react';
-import type {PropsWithChildren} from 'react';
+import React, {useState} from 'react';
 import {
   SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  useColorScheme,
   View,
+  Text,
+  TextInput,
+  FlatList,
+  Pressable,
 } from 'react-native';
+import {Realm, RealmProvider, useRealm, useQuery} from '@realm/react';
 
-import {
-  Colors,
-  DebugInstructions,
-  Header,
-  LearnMoreLinks,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
+class Task extends Realm.Object {
+  _id!: Realm.BSON.ObjectId;
+  description!: string;
+  isComplete!: boolean;
+  createdAt!: Date;
 
-type SectionProps = PropsWithChildren<{
-  title: string;
-}>;
+  static generate(description: string) {
+    return {
+      _id: new Realm.BSON.ObjectId(),
+      description,
+      createdAt: new Date(),
+    };
+  }
 
-function Section({children, title}: SectionProps): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
+  static schema = {
+    name: 'Task',
+    primaryKey: '_id',
+    properties: {
+      _id: 'objectId',
+      description: 'string',
+      isComplete: {type: 'bool', default: false},
+      createdAt: 'date',
+    },
+  };
+}
+
+export default function AppWrapper() {
   return (
-    <View style={styles.sectionContainer}>
-      <Text
-        style={[
-          styles.sectionTitle,
-          {
-            color: isDarkMode ? Colors.white : Colors.black,
-          },
-        ]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
-    </View>
+    <RealmProvider schema={[Task]}>
+      <TaskApp />
+    </RealmProvider>
   );
 }
 
-function App(): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
-
-  const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
-  };
+function TaskApp() {
+  const realm = useRealm();
+  const tasks = useQuery(Task);
+  const [newDescription, setNewDescription] = useState('');
 
   return (
-    <SafeAreaView style={backgroundStyle}>
-      <StatusBar
-        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={backgroundStyle.backgroundColor}
-      />
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        style={backgroundStyle}>
-        <Header />
-        <View
-          style={{
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
+    <SafeAreaView>
+      <View
+        style={{flexDirection: 'row', justifyContent: 'center', margin: 10}}>
+        <TextInput
+          value={newDescription}
+          placeholder="Enter new task description"
+          onChangeText={setNewDescription}
+        />
+        <Pressable
+          onPress={() => {
+            realm.write(() => {
+              realm.create('Task', Task.generate(newDescription));
+            });
+            setNewDescription('');
           }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.tsx</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debug">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
-            Read the docs to discover what to do next:
-          </Section>
-          <LearnMoreLinks />
-        </View>
-      </ScrollView>
+          <Text>➕</Text>
+        </Pressable>
+      </View>
+      <FlatList
+        data={tasks.sorted('createdAt')}
+        keyExtractor={item => item._id.toHexString()}
+        renderItem={({item}) => {
+          return (
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'center',
+                margin: 10,
+              }}>
+              <Pressable
+                onPress={() =>
+                  realm.write(() => {
+                    item.isComplete = !item.isComplete;
+                  })
+                }>
+                <Text>{item.isComplete ? '✅' : '☑️'}</Text>
+              </Pressable>
+              <Text style={{paddingHorizontal: 10}}>{item.description}</Text>
+              <Pressable
+                onPress={() => {
+                  realm.write(() => {
+                    realm.delete(item);
+                  });
+                }}>
+                <Text>{'🗑️'}</Text>
+              </Pressable>
+            </View>
+          );
+        }}></FlatList>
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
-  },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-  },
-  sectionDescription: {
-    marginTop: 8,
-    fontSize: 18,
-    fontWeight: '400',
-  },
-  highlight: {
-    fontWeight: '700',
-  },
-});
-
-export default App;
